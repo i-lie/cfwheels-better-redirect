@@ -41,23 +41,23 @@
 	 	hint="RedirectAway(params) Saves URL, then does redirect."
 	 	description="Store the original url in the session, and then redirect to the other action">
 
-		<cfscript>
-			var return_url = $getCurrentURL();
+		<cfset var return_url = $getCurrentURL()>
 
-			// add the returnUrl param
-			if (return_url != "") {
-				if (IsDefined("arguments.params") && (arguments.params != "")) {
-					arguments.params = arguments.params & "&";
-				} else {
-					arguments.params = "";
-				}
+		<cfset setSessionRedirectParams()>
 
-				arguments.params = arguments.params &
-									"returnUrl=" & return_url;
-			}
+		<!--- add the returnUrl param --->
+		<cfif return_url neq "">
+			<cfif IsDefined("arguments.params") AND (arguments.params neq "")>
+				<cfset arguments.params = arguments.params & "&">
+			<cfelse>
+				<cfset arguments.params = "">
+			</cfif>
 
-			redirectTo(argumentcollection: arguments);
-		</cfscript>
+			<cfset arguments.params = arguments.params &
+									"returnUrl=" & return_url>
+		</cfif>
+
+		<cfreturn redirectTo(argumentcollection: arguments)>
 	 </cffunction>
 
 	 <cffunction name="redirectBack"
@@ -68,7 +68,7 @@
 		<cfset var redirect_args = "">
 		<cfset var pattern_args = "">
 
-		<cfif StructKeyExists(params, "returnUrl")>
+		<cfif IsDefined("params") AND IsStruct(params) AND StructKeyExists(params, "returnUrl")>
 			<cfset backUrl = URLDecode(params.returnUrl)>
 		</cfif>
 
@@ -77,6 +77,7 @@
 				<!--- find the matches route --->
 				<cfset route = application.wheels.dispatch.$findMatchingRoute(backUrl)>
 
+				<!--- for unit testing purposes, we need to add the "delay" param --->
 				<cfset redirect_args = {
 					route = route.name,
 					delay = true
@@ -88,7 +89,6 @@
 
 				<cfset StructAppend(redirect_args, pattern_args, true)>
 
-				<!--- for unit testing purposes, we need to add the "delay" param --->
 				<cfreturn redirectTo(argumentcollection: redirect_args)>
 			<cfcatch type="any">
 				<!--- fallback to cflocation if we can't find any matching route --->
@@ -99,6 +99,45 @@
 			<cfset redirectTo(argumentCollection: arguments)>
 		</cfif>
 	 </cffunction>
+
+	<cffunction name="setSessionRedirectParams" access="public" returntype="void" output="false" hint="Store the params variable in the session.">
+		<cfargument name="excludes" type="string" required="false" default="" hint="List of params to be excluded in the session.">
+
+		<cfset var session_name = "">
+		<cfset var key = "">
+
+		<cfif IsDefined("params")>
+			<cfset session_name = $getSessionRedirectParamsName()>
+
+			<cfset session[session_name] = Duplicate(params)>
+
+			<cfloop index="key" list="#arguments.excludes#" delimiters=",">
+				<cfset StructDelete(session[session_name], key)>
+			</cfloop>
+		</cfif>
+	</cffunction>
+
+	<cffunction name="getSessionRedirectParams" access="public" returntype="struct" output="false" hint="Get the params that are stored in the session.">
+		<cfargument name="clearAfterGet" type="boolean" required="false" default="true" hint="Clear the params in the session variable after finished?">
+
+		<cfset var session_params = StructNew()>
+		<cfset var key_name = $getSessionRedirectParamsName()>
+
+		<cfif StructKeyExists(session, key_name)>
+			<cfset session_params = Duplicate(session[key_name])>
+
+			<!--- clear the session params --->
+			<cfif arguments.clearAfterGet>
+				<cfset StructDelete(session, key_name)>
+			</cfif>
+		</cfif>
+
+		<cfreturn session_params>
+	</cffunction>
+
+	<cffunction name="clearSessionRedirectParams" access="public" returntype="void" output="false" hint="Clear the params in session.">
+		<cfset StructDelete(session, $getSessionRedirectParamsName)>
+	</cffunction>
 
 	<cffunction name="$getCurrentURL" access="public" output="false">
 		<cfset var current_url = "">
@@ -139,5 +178,9 @@
 		</cfif>
 
 		<cfreturn struct_out>
+	</cffunction>
+
+	<cffunction name="$getSessionRedirectParamsName" access="public" returntype="string" output="false" hint="Get the params name in session.">
+		<cfreturn "betterRedirectsParams">
 	</cffunction>
 </cfcomponent>
